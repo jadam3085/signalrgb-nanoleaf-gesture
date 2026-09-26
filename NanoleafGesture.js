@@ -17,7 +17,7 @@
 // ONE SENDER: udp.send is only ever called from Render (PanelStream.render).
 
 export function Name() { return "Nanoleaf Gesture"; }
-export function Version() { return "1.0.0"; }
+export function Version() { return "1.0.1"; }
 export function Type() { return "network"; }
 export function Publisher() { return "Jonathan Adam"; }
 export function Size() { return [1, 1]; }
@@ -175,9 +175,10 @@ function lightPanels(info) {
 	return {panels, orientation};
 }
 
-// Map panels onto a SignalRGB LED grid. Nanoleaf coordinates are y-up; the layout is
-// rotated counter-clockwise by globalOrientation about its centroid (as the Nanoleaf app
-// draws it), then flipped to the canvas' y-down. The cell size is half the closest
+// Map panels onto a SignalRGB LED grid. Nanoleaf positionData is y-DOWN (screen style —
+// verified on a Shapes wall 2026-09-26: treating it as y-up flipped the wall vertically);
+// it is converted to y-up, rotated counter-clockwise by globalOrientation about its
+// centroid (as the Nanoleaf app draws it), then flipped to the canvas' y-down. The cell size is half the closest
 // panel spacing so every panel owns a distinct cell, capped at MAX_GRID cells.
 function canvasMap(panels, orientationDeg) {
 	if (!panels || !panels.length) { return {width: 1, height: 1, leds: []}; }
@@ -192,7 +193,7 @@ function canvasMap(panels, orientationDeg) {
 	const s = Math.sin(th);
 	const pts = panels.map(function (p) {
 		const dx = p.x - cx;
-		const dy = p.y - cy;
+		const dy = -(p.y - cy);   // y-down data -> y-up maths
 		return {id: p.id, x: dx * c - dy * s, y: -(dx * s + dy * c)};
 	});
 	let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
