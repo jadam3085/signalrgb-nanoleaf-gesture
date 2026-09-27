@@ -17,7 +17,7 @@
 // ONE SENDER: udp.send is only ever called from Render (PanelStream.render).
 
 export function Name() { return "Nanoleaf Gesture"; }
-export function Version() { return "1.0.1"; }
+export function Version() { return "1.0.2"; }
 export function Type() { return "network"; }
 export function Publisher() { return "Jonathan Adam"; }
 export function Size() { return [1, 1]; }
@@ -175,11 +175,26 @@ function lightPanels(info) {
 	return {panels, orientation};
 }
 
-// Map panels onto a SignalRGB LED grid. Nanoleaf positionData is y-DOWN (screen style —
-// verified on a Shapes wall 2026-09-26: treating it as y-up flipped the wall vertically);
-// it is converted to y-up, rotated counter-clockwise by globalOrientation about its
-// centroid (as the Nanoleaf app draws it), then flipped to the canvas' y-down. The cell size is half the closest
-// panel spacing so every panel owns a distinct cell, capped at MAX_GRID cells.
+// Map panels onto a SignalRGB LED grid, in the SAME sense as the engine's
+// nanoleaf_fx.Layout (kept in lockstep so the engine's frame endpoint and SignalRGB's
+// own effects -- e.g. Screen Ambience -- paint the same physical panel at the same
+// canvas cell). Nanoleaf positionData is y-DOWN (screen style, as the Nanoleaf app
+// draws it). Negating y to y-up and then rotating by globalOrientation (the
+// pre-2026-09-26 fix here, and still the SDK/App's own convention) gets the WALL'S
+// vertical axis right but silently mirrors horizontal, because reflecting an axis
+// after rotating by theta is the same map as rotating by -theta after reflecting
+// (F . R(theta) == R(-theta) . F), and negate-y-then-negate-x is a 180-degree
+// rotation: mirror_x . R(theta) . negate_y == R(180 - theta). So instead of
+// negate-y + rotate(theta) + mirror-x, this rotates the RAW (never negated)
+// positionData directly by (180 - globalOrientation) -- the orientation-sense
+// complement for y-down data -- which lands on the identical, already
+// horizontally- and vertically-correct canvas with no separate mirror step. See
+// nanoleaf_fx.Layout.__init__ (python engine) for the point-by-point proof; both
+// must apply the same formula or the two renderers disagree panel-by-panel. The cell
+// size is half the closest panel spacing so every panel owns a distinct cell, capped
+// at MAX_GRID cells. Final y is negated once, at the very end, only to convert this
+// canvas's "math" y-up into the y-DOWN pixel-grid convention device.setSize()/
+// setControllableLeds() expect (top-left origin) -- NOT a second orientation flip.
 function canvasMap(panels, orientationDeg) {
 	if (!panels || !panels.length) { return {width: 1, height: 1, leds: []}; }
 	const n = panels.length;
@@ -188,12 +203,13 @@ function canvasMap(panels, orientationDeg) {
 	for (const p of panels) { cx += p.x; cy += p.y; }
 	cx /= n;
 	cy /= n;
-	const th = (Number(orientationDeg) || 0) * Math.PI / 180;
+	const effDeg = 180 - (Number(orientationDeg) || 0);
+	const th = effDeg * Math.PI / 180;
 	const c = Math.cos(th);
 	const s = Math.sin(th);
 	const pts = panels.map(function (p) {
 		const dx = p.x - cx;
-		const dy = -(p.y - cy);   // y-down data -> y-up maths
+		const dy = p.y - cy;               // raw positionData, never pre-negated
 		return {id: p.id, x: dx * c - dy * s, y: -(dx * s + dy * c)};
 	});
 	let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;

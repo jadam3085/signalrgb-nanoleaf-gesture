@@ -24,9 +24,14 @@ browser's address bar, or add the URL under SignalRGB → Settings → Add-ons.
   and stores the token in SignalRGB's service settings (`<controller id>` / `key`).
   Known controllers are cached under `ipCache` / `cache`.
 - **Canvas mapping.** It reads `panelLayout` and skips controllers, connectors,
-  caps and the Rhythm module. Each light panel becomes one LED, placed at its
-  `x`/`y` position rotated by the layout's `globalOrientation`, so SignalRGB samples
-  the canvas where each panel actually sits.
+  caps and the Rhythm module. Each light panel becomes one LED, placed at its raw
+  `x`/`y` position rotated by `180 - globalOrientation` (positionData is y-down,
+  screen-style, as the Nanoleaf app draws it; applying the literal `globalOrientation`
+  after negating y to y-up gets one axis right and the other mirrored -- see
+  `../README.md` "Orientation fix" for the full derivation), so SignalRGB samples the
+  canvas where each panel physically sits, the same way round as the gesture engine's
+  own `nanoleaf_fx.Layout` (kept in lockstep on purpose: a right-hand gesture blob and
+  a Screen Ambience sweep need to agree on which side of the wall is which).
 - **Streaming.** It switches the controller to extControl v2 once
   (`PUT /effects {"write":{"command":"display","animType":"extControl","extControlVersion":"v2"}}`).
   After that, every SignalRGB frame is sent as one UDP packet to port 60222.
